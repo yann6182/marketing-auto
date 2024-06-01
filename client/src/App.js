@@ -4,6 +4,8 @@ import axios from "axios";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import "./App.css";
 
 function App() {
@@ -59,6 +61,8 @@ function App() {
 					path="/home"
 					element={user ? <Home user={user} /> : <Navigate to="/login" />}
 				/>
+				 <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password/:token" element={<ResetPassword />} />
 			</Routes>
 		</div>
 	);
