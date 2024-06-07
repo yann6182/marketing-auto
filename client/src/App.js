@@ -6,6 +6,8 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import ClientsPage from './pages/ClientsPage';
+import Navbar from './components/Navbar';
 import "./App.css";
 
 function App() {
@@ -16,7 +18,7 @@ function App() {
 			// Essayez d'abord de récupérer les données de l'utilisateur via la route /auth/login/success
 			let url = `${process.env.REACT_APP_API_URL}/auth/login/success`;
 			let { data } = await axios.get(url, { withCredentials: true });
-	
+	    
 			// Si l'utilisateur n'est pas connecté via Google, essayez avec la route /auth/me
 			if (!data.user) {
 				url = `${process.env.REACT_APP_API_URL}/auth/me`;
@@ -43,6 +45,11 @@ function App() {
 	return (
 		<div className="container">
 			<Routes>
+
+			
+            
+                
+          
 				<Route
 					exact
 					path="/"
@@ -63,6 +70,9 @@ function App() {
 				/>
 				 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password/:token" element={<ResetPassword />} />
+				<Route path="/clients" element={<ClientsPage />} />
+
+				
 			</Routes>
 		</div>
 	);

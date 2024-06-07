@@ -1,5 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+
 
 function Home({ user }) {
     const navigate = useNavigate();
@@ -42,6 +44,9 @@ function Home({ user }) {
                     >
                         Log Out
                     </button>
+                    <div>
+                        <Link to="/clients">Clients</Link>
+                    </div>
                 </div>
             </div>
         </div>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import axios from "axios";
+import { Link } from 'react-router-dom';
 
 function Dashboard() {
     const [user, setUser] = useState(null);
@@ -36,6 +37,8 @@ function Dashboard() {
     }
 
     return (
+
+        
         <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
             <h1 className="text-3xl font-bold mb-8">Dashboard</h1>
             <div className="flex flex-col md:flex-row bg-white shadow-md rounded-lg overflow-hidden">
@@ -76,6 +79,10 @@ function Dashboard() {
                     >
                         Log Out
                     </button>
+
+                    <div>
+                        <Link to="/clients">Clients</Link>
+                    </div>
                 </div>
             </div>
         </div>
