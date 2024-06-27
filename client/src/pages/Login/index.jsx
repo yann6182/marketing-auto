@@ -30,7 +30,6 @@ function Login() {
         <div className="flex items-center justify-center min-h-screen bg-gradient-to-r from-blue-400 to-purple-500">
             <div className="bg-white p-8 rounded-2xl shadow-2xl transform transition-all hover:scale-105 duration-500 w-full max-w-md">
                 <h1 className="text-4xl font-extrabold text-center mb-8 text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600">Log in</h1>
-                <h2 className="text-2xl font-bold text-center mb-4 text-pink-500">Pour Marion, que j'aime beaucoup ! ❤️</h2>
                 {error && <p className="text-red-500 mb-4">{error}</p>}
                 <form onSubmit={handleLogin} className="space-y-6">
                     <div>
