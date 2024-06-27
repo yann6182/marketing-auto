@@ -1,19 +1,24 @@
-const router = require("express").Router();
+const express = require('express');
+const bcrypt = require('bcrypt');
+const { Strategy: GoogleStrategy } = require("passport-google-oauth20");
 const passport = require("passport");
-const bcrypt = require("bcrypt");
+const { MongoClient } = require('mongodb');
 const jwt = require("jsonwebtoken");
 const { body, validationResult } = require("express-validator");
-const db = require("../db"); // Importer la connexion à la base de données
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
+const router = express.Router();
+require('dotenv').config();
+
+const mongoUrl = process.env.MONGO_URL;
+const dbName = process.env.DB_NAME;
 
 // Fonction pour générer un token JWT
 const generateToken = (user) => {
-  return jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET, {
+  return jwt.sign({ id: user._id, email: user.email }, process.env.JWT_SECRET, {
     expiresIn: '1h',
   });
 };
-
 
 // Configurer le transporteur d'e-mails
 const transporter = nodemailer.createTransport({
@@ -41,20 +46,26 @@ const validateLogin = [
   body('password').not().isEmpty().withMessage('Password cannot be empty'),
 ];
 
+// Fonction pour obtenir la connexion à la base de données
+async function getDb() {
+  const client = new MongoClient(mongoUrl, { useNewUrlParser: true, useUnifiedTopology: true });
+  await client.connect();
+  return client.db(dbName);
+}
 
 // Route pour demander la réinitialisation de mot de passe
 router.post("/forgot-password", async (req, res) => {
   const { email } = req.body;
   try {
-    const query = "SELECT * FROM users WHERE email = ?";
-    const [results] = await db.query(query, [email]);
-    if (results.length === 0) return res.status(404).json({ error: "User not found" });
+    const db = await getDb();
+    const user = await db.collection('users').findOne({ email });
 
-    const user = results[0];
+    if (!user) return res.status(404).json({ error: "User not found" });
+
     const token = crypto.randomBytes(20).toString('hex');
-    const expireDate =new Date(Date.now() + 3600000); // 1 hour
+    const expireDate = new Date(Date.now() + 3600000); // 1 hour
 
-    await db.execute("UPDATE users SET reset_password_token = ?, reset_password_expires = ? WHERE email = ?", [token, expireDate, email]);
+    await db.collection('users').updateOne({ email }, { $set: { reset_password_token: token, reset_password_expires: expireDate } });
 
     const resetURL = `${process.env.CLIENT_URL}/reset-password/${token}`;
     const mailOptions = {
@@ -69,16 +80,16 @@ router.post("/forgot-password", async (req, res) => {
 
     transporter.sendMail(mailOptions, (error, response) => {
       if (error) {
-          console.error('Error sending email:', error);
-          return res.status(500).json({ error: 'Error sending email' });
+        console.error('Error sending email:', error);
+        return res.status(500).json({ error: 'Error sending email' });
       }
       console.log('Email sent:', response);
       res.status(200).json({ message: 'Password reset email sent' });
-  });
-} catch (err) {
-  console.error('Database error:', err);
-  res.status(500).json({ error: "Database error" });
-}
+    });
+  } catch (err) {
+    console.error('Database error:', err);
+    res.status(500).json({ error: "Database error" });
+  }
 });
 
 // Route pour réinitialiser le mot de passe
@@ -87,14 +98,17 @@ router.post("/reset-password/:token", async (req, res) => {
   const { token } = req.params;
 
   try {
-    const query = "SELECT * FROM users WHERE reset_password_token = ? AND reset_password_expires > ?";
-    const [results] = await db.query(query, [token, Date.now()]);
-    if (results.length === 0) return res.status(400).json({ error: "Password reset token is invalid or has expired" });
+    const db = await getDb();
+    const user = await db.collection('users').findOne({ reset_password_token: token, reset_password_expires: { $gt: new Date() } });
 
-    const user = results[0];
+    if (!user) return res.status(400).json({ error: "Password reset token is invalid or has expired" });
+
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    await db.execute("UPDATE users SET password = ?, reset_password_token = NULL, reset_password_expires = NULL WHERE id = ?", [hashedPassword, user.id]);
+    await db.collection('users').updateOne(
+      { _id: user._id },
+      { $set: { password: hashedPassword, reset_password_token: null, reset_password_expires: null } }
+    );
 
     res.status(200).json({ message: "Password has been reset" });
   } catch (err) {
@@ -111,15 +125,14 @@ router.post("/signup", validateSignup, async (req, res) => {
 
   const { email, password } = req.body;
   try {
-    const hashedPassword = await bcrypt.hash(password , 10);
-    const query = "INSERT INTO users (email, password) VALUES (?, ?)";
-    await db.execute(query, [email, hashedPassword]);
-    const [result] = await db.query("SELECT LAST_INSERT_ID() as id");
-    const user = { id: result[0].id, email };
-    const token = generateToken(user);
-    res.status(201).json({ message: "User created", token, user: sanitizeUser(user) });
+    const db = await getDb();
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = await db.collection('users').insertOne({ email, password: hashedPassword });
+    const token = generateToken(user.ops[0]);
+
+    res.status(201).json({ message: "User created", token, user: sanitizeUser(user.ops[0]) });
   } catch (error) {
-    if (error.code === "ER_DUP_ENTRY") {
+    if (error.code === 11000) {
       return res.status(400).json({ error: "User already exists" });
     }
     res.status(500).json({ error: "Server error" });
@@ -130,25 +143,25 @@ router.post("/signup", validateSignup, async (req, res) => {
 router.post("/login", validateLogin, async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+    return res.status(400).json({ errors: errors.array() });
   }
 
   const { email, password } = req.body;
   try {
-      const query = "SELECT * FROM users WHERE email = ?";
-      const [results] = await db.query(query, [email]);
-      if (results.length === 0) return res.status(404).json({ error: "User not found" });
+    const db = await getDb();
+    const user = await db.collection('users').findOne({ email });
 
-      const user = results[0];
-      const isMatch = await bcrypt.compare(password, user.password);
-      if (!isMatch) return res.status(400).json({ error: "Invalid credentials" });
+    if (!user) return res.status(404).json({ error: "User not found" });
 
-      const token = generateToken(user);
-      
-      // Retourner les informations de l'utilisateur (avec nettoyage des données sensibles)
-      res.status(200).json({ message: "Logged in", token, user: sanitizeUser(user) });
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(400).json({ error: "Invalid credentials" });
+
+    const token = generateToken(user);
+
+    // Retourner les informations de l'utilisateur (avec nettoyage des données sensibles)
+    res.status(200).json({ message: "Logged in", token, user: sanitizeUser(user) });
   } catch (err) {
-      res.status(500).json({ error: "Database error" });
+    res.status(500).json({ error: "Database error" });
   }
 });
 
@@ -170,21 +183,14 @@ function authenticateToken(req, res, next) {
   });
 }
 
-
 router.get("/login/success", (req, res) => {
   if (req.user) {
     res.status(200).json({
       error: false,
       message: "Successfully Logged In",
       user: sanitizeUser(req.user),
-   
-      
     });
-  
-
-    
   } else {
-    
     res.status(403).json({ error: true, message: "Not Authorized" });
   }
 });

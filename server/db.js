@@ -1,31 +1,64 @@
-const mysql = require("mysql2");
-require("dotenv").config();
+const { MongoClient } = require('mongodb');
+require('dotenv').config();
 
-const db = mysql.createConnection({
-  host: process.env.DB_HOST ,
-  user: process.env.DB_USER ,
-  password: process.env.DB_PASSWORD ,
-  database: process.env.DB_NAME 
-});
+// Configuration de la base de données
+const config = {
+  url: process.env.MONGO_URL,
+  dbName: process.env.DB_NAME,
+};
 
-db.connect((err) => {
-  if (err) throw err;
-  console.log("Connected to database");
+// Fonction pour se connecter à la base de données et initialiser les collections si nécessaire
+async function connectAndInitializeDatabase() {
+  let client;
 
-  const createUserTableQuery = `
-    CREATE TABLE IF NOT EXISTS users (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      email VARCHAR(255) NOT NULL UNIQUE,
-      password VARCHAR(255) NOT NULL,
-      google_id VARCHAR(255),
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-  `;
+  try {
+    // Connexion à la base de données
+    client = new MongoClient(config.url, { useNewUrlParser: true, useUnifiedTopology: true });
+    await client.connect();
+    console.log('Connected to MongoDB');
 
-  db.query(createUserTableQuery, (err, result) => {
-    if (err) throw err;
-    console.log("Table 'users' checked/created");
-  });
-});
+    const db = client.db(config.dbName);
 
-module.exports = db.promise(); // Utiliser les promesses pour les requêtes asynchrones
+    // Vérification et création des collections si elles n'existent pas
+    await createCollections(db);
+
+    console.log("All collections checked/created");
+  } catch (error) {
+    console.error('Error connecting to database:', error);
+  } finally {
+    // Fermez la connexion à la base de données
+    if (client) {
+      await client.close();
+    }
+  }
+}
+
+// Fonction pour créer les collections si elles n'existent pas
+async function createCollections(db) {
+  try {
+    // Vérifier si la collection 'users' existe et créer l'index si nécessaire
+    const usersCollection = await db.collection('users');
+    await usersCollection.createIndex({ email: 1 }, { unique: true });
+    console.log("Index 'email' created on collection 'users'");
+
+    // Vérifier si la collection 'clients' existe et créer l'index si nécessaire
+    const clientsCollection = await db.collection('clients');
+    await clientsCollection.createIndex({ user_id: 1 });
+    console.log("Index 'user_id' created on collection 'clients'");
+
+    // Vérifier si la collection 'campaigns' existe et créer l'index si nécessaire
+    const campaignsCollection = await db.collection('campaigns');
+    await campaignsCollection.createIndex({ user_id: 1 });
+    console.log("Index 'user_id' created on collection 'campaigns'");
+  } catch (error) {
+    console.error('Error creating indexes:', error);
+  }
+}
+
+// Appel de la fonction pour se connecter à la base de données et initialiser les collections
+connectAndInitializeDatabase();
+
+// Export des fonctions ou objets nécessaires pour être utilisés dans d'autres parties du code si nécessaire
+module.exports = {
+  connectAndInitializeDatabase, // Vous pouvez exporter cette fonction pour l'utiliser dans d'autres parties de votre application si nécessaire
+};

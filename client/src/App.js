@@ -7,7 +7,9 @@ import Signup from "./pages/Signup";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import ClientsPage from './pages/ClientsPage';
+import CampaignsPage from './pages/CampaignsPage';
 import Navbar from './components/Navbar';
+import Profile from './pages/Profile';
 import "./App.css";
 
 function App() {
@@ -44,6 +46,7 @@ function App() {
 
 	return (
 		<div className="container">
+			<Navbar user={user} />
 			<Routes>
 
 			
@@ -71,7 +74,8 @@ function App() {
 				 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password/:token" element={<ResetPassword />} />
 				<Route path="/clients" element={<ClientsPage />} />
-
+				<Route path="/campaigns" element={<CampaignsPage />} />
+				<Route path="/profile" element={<Profile user={user} />} />
 				
 			</Routes>
 		</div>

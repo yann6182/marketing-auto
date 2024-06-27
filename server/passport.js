@@ -1,9 +1,10 @@
+const passport = require('passport');
+const { Strategy: GoogleStrategy } = require('passport-google-oauth20');
 const bcrypt = require('bcrypt');
-const { Strategy: GoogleStrategy } = require("passport-google-oauth20");
-const passport = require("passport");
-const db = require("./db"); // Importer la connexion à la base de données
-const jwt = require("jsonwebtoken");
-require("dotenv").config();
+const jwt = require('jsonwebtoken');
+const User = require('./models/User'); // Assurez-vous de créer ce modèle
+const { generateRandomPassword } = require('./utils'); // Importez votre fonction pour générer un mot de passe aléatoire
+require('dotenv').config();
 
 // Fonction pour générer un token JWT
 const generateToken = (user) => {
@@ -12,46 +13,32 @@ const generateToken = (user) => {
   });
 };
 
-// Fonction pour générer un mot de passe aléatoire
-const generateRandomPassword = () => {
-  return Math.random().toString(36).slice(-8);
-};
-
-// Fonction pour nettoyer les données utilisateur
-const sanitizeUser = (user) => {
-  const { password, ...sanitizedUser } = user;
-  return sanitizedUser;
-};
-
 passport.use(
   new GoogleStrategy(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: "/auth/google/callback",
-      scope: ["profile", "email"],
+      callbackURL: '/auth/google/callback',
+      scope: ['profile', 'email'],
     },
     async function (accessToken, refreshToken, profile, done) {
       try {
-        const query = "SELECT * FROM users WHERE google_id = ?";
-        const [existingUsers] = await db.query(query, [profile.id]);
+        let user = await User.findOne({ google_id: profile.id });
 
-        if (existingUsers.length > 0) {
-          return done(null, sanitizeUser(existingUsers[0]));
+        if (user) {
+          return done(null, user);
         } else {
-          // Génère un mot de passe aléatoire
           const randomPassword = generateRandomPassword();
           const hashedPassword = await bcrypt.hash(randomPassword, 10);
-          
-          // Insère un nouvel utilisateur avec un mot de passe aléatoire dans la base de données
-          const insertQuery = "INSERT INTO users (email, google_id, password) VALUES (?, ?, ?)";
-          await db.execute(insertQuery, [profile.emails[0].value, profile.id, hashedPassword]);
 
-          // Récupère le nouvel utilisateur de la base de données
-          const newUserQuery = "SELECT * FROM users WHERE google_id = ?";
-          const [newUsers] = await db.query(newUserQuery, [profile.id]);
-          
-          return done(null, sanitizeUser(newUsers[0]));
+          user = new User({
+            email: profile.emails[0].value,
+            google_id: profile.id,
+            password: hashedPassword,
+          });
+
+          await user.save();
+          return done(null, user);
         }
       } catch (error) {
         return done(error);
@@ -66,10 +53,11 @@ passport.serializeUser((user, done) => {
 
 passport.deserializeUser(async (id, done) => {
   try {
-    const query = "SELECT * FROM users WHERE id = ?";
-    const [results] = await db.query(query, [id]);
-    done(null, sanitizeUser(results[0]));
+    const user = await User.findById(id);
+    done(null, user);
   } catch (err) {
     done(err);
   }
 });
+
+module.exports = passport;
