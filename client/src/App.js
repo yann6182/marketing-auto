@@ -17,11 +17,9 @@ function App() {
 
 	const getUser = async () => {
 		try {
-			// Essayez d'abord de récupérer les données de l'utilisateur via la route /auth/login/success
 			let url = `${process.env.REACT_APP_API_URL}/auth/login/success`;
 			let { data } = await axios.get(url, { withCredentials: true });
 	    
-			// Si l'utilisateur n'est pas connecté via Google, essayez avec la route /auth/me
 			if (!data.user) {
 				url = `${process.env.REACT_APP_API_URL}/auth/me`;
 				const token = localStorage.getItem('token'); // Assurez-vous que le token est stocké quelque part
